@@ -88,7 +88,7 @@ True risk is raised only on multi-sensor agreement — matching our hardware con
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/<your-username>/mineguard.git
+git clone https://github.com/appu2410/mineguard.git
 cd mineguard
 ```
 
