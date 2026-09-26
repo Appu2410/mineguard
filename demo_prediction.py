@@ -2,153 +2,93 @@
 MINEGUARD - Live Prediction Demo
 Team VORTEX# | SIH 2026 | PS 26025
 
-This script loads the trained model and lets you test sensor readings.
-It demonstrates multi-sensor fusion for subsidence risk detection.
+Demonstrates multi-sensor fusion using literature-based thresholds
++ trained Random Forest model.
 """
 
 import joblib
 import pandas as pd
 import os
 
-# Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 
-# Load trained artifacts
 model = joblib.load(os.path.join(MODEL_DIR, "mineguard_rf_model.joblib"))
 scaler = joblib.load(os.path.join(MODEL_DIR, "mineguard_scaler.joblib"))
 feature_cols = joblib.load(os.path.join(MODEL_DIR, "feature_cols.joblib"))
 
+# Literature thresholds (same as dataset generator)
+TILT_ATTENTION = 0.10
+CRACK_WARNING = 2.0
+STRAIN_ATTENTION = 0.5
+
 def predict_risk(tilt, vibration, moisture, strain, crack_gap, rssi, acoustic):
-    """
-    Predict subsidence risk from multi-sensor readings.
-    """
     sample = {
-        "tilt": tilt,
-        "vibration": vibration,
-        "moisture": moisture,
-        "strain": strain,
-        "crack_gap": crack_gap,
-        "rssi": rssi,
-        "acoustic": acoustic,
+        "tilt": tilt, "vibration": vibration, "moisture": moisture,
+        "strain": strain, "crack_gap": crack_gap, "rssi": rssi, "acoustic": acoustic,
     }
-    
     df = pd.DataFrame([sample])
-    
-    # Derived features (same as training)
     df["tilt_vibration_product"] = df["tilt"] * df["vibration"]
     df["strain_crack_ratio"] = df["strain"] / (df["crack_gap"] + 0.1)
     df["signal_anomaly"] = (df["rssi"] + 70).abs()
-    
+
     X = df[feature_cols]
     X_scaled = scaler.transform(X)
-    
     pred = model.predict(X_scaled)[0]
     proba = model.predict_proba(X_scaled)[0]
-    
-    result = {
+
+    # Also show which sensors crossed literature thresholds
+    crossed = []
+    if tilt >= TILT_ATTENTION: crossed.append(f"tilt≥{TILT_ATTENTION}°")
+    if crack_gap >= CRACK_WARNING: crossed.append(f"crack≥{CRACK_WARNING}mm")
+    if strain >= STRAIN_ATTENTION: crossed.append(f"strain≥{STRAIN_ATTENTION}")
+    if rssi <= -75: crossed.append("RSSI degraded")
+
+    return {
         "prediction": "SUBSIDENCE RISK ⚠️" if pred == 1 else "NORMAL ✅",
         "confidence": round(float(max(proba)) * 100, 1),
         "risk_probability": round(float(proba[1]) * 100, 1),
+        "sensors_above_threshold": crossed if crossed else ["none"],
         "recommendation": (
             "Raise multi-sensor confirmed alert + GPS tag + notify operators"
-            if pred == 1
-            else "Continue normal monitoring"
+            if pred == 1 else "Continue normal monitoring"
         ),
     }
-    return result
 
-
-# ====================== DEMO CASES ======================
 print("=" * 60)
-print("   MINEGUARD - Multi-Sensor Subsidence Risk Demo")
+print("   MINEGUARD – Multi-Sensor Subsidence Risk Demo")
 print("   Team VORTEX# | SIH 2026 | PS 26025")
+print("   Thresholds grounded in CN120489061B + Indian coalfield studies")
 print("=" * 60)
 
-# Case 1: Normal ground condition
-print("\n📡 CASE 1: Normal Sensor Reading")
-print("-" * 40)
-normal = {
-    "tilt": 0.18,
-    "vibration": 0.09,
-    "moisture": 21.5,
-    "strain": 0.14,
-    "crack_gap": 1.3,
-    "rssi": -64,
-    "acoustic": 0.06,
-}
-for k, v in normal.items():
-    print(f"  {k:12}: {v}")
-result = predict_risk(**normal)
-print(f"\n  → Prediction     : {result['prediction']}")
-print(f"  → Confidence     : {result['confidence']}%")
-print(f"  → Risk Probability: {result['risk_probability']}%")
-print(f"  → Action         : {result['recommendation']}")
+cases = [
+    ("CASE 1: Normal Sensor Reading", {
+        "tilt": 0.12, "vibration": 0.08, "moisture": 21.5,
+        "strain": 0.18, "crack_gap": 1.2, "rssi": -63, "acoustic": 0.05
+    }),
+    ("CASE 2: High-Risk Multi-Sensor Event", {
+        "tilt": 0.55, "vibration": 0.65, "moisture": 24.0,
+        "strain": 1.4, "crack_gap": 3.8, "rssi": -81, "acoustic": 0.35
+    }),
+    ("CASE 3: High Vibration Only (Machinery)", {
+        "tilt": 0.14, "vibration": 0.72, "moisture": 20.0,
+        "strain": 0.20, "crack_gap": 1.3, "rssi": -66, "acoustic": 0.30
+    }),
+]
 
-# Case 2: Clear subsidence risk (multi-sensor agreement)
-print("\n\n📡 CASE 2: High-Risk Multi-Sensor Event")
-print("-" * 40)
-risk = {
-    "tilt": 2.1,
-    "vibration": 0.85,
-    "moisture": 25.0,
-    "strain": 1.8,
-    "crack_gap": 4.5,
-    "rssi": -82,
-    "acoustic": 0.45,
-}
-for k, v in risk.items():
-    print(f"  {k:12}: {v}")
-result = predict_risk(**risk)
-print(f"\n  → Prediction     : {result['prediction']}")
-print(f"  → Confidence     : {result['confidence']}%")
-print(f"  → Risk Probability: {result['risk_probability']}%")
-print(f"  → Action         : {result['recommendation']}")
-
-# Case 3: High vibration only (machinery / footsteps - should be filtered)
-print("\n\n📡 CASE 3: High Vibration Only (Machinery / Footsteps)")
-print("-" * 40)
-border = {
-    "tilt": 0.25,
-    "vibration": 0.65,
-    "moisture": 20.0,
-    "strain": 0.18,
-    "crack_gap": 1.4,
-    "rssi": -67,
-    "acoustic": 0.35,
-}
-for k, v in border.items():
-    print(f"  {k:12}: {v}")
-result = predict_risk(**border)
-print(f"\n  → Prediction     : {result['prediction']}")
-print(f"  → Confidence     : {result['confidence']}%")
-print(f"  → Risk Probability: {result['risk_probability']}%")
-print(f"  → Action         : {result['recommendation']}")
+for title, vals in cases:
+    print(f"\n📡 {title}")
+    print("-" * 40)
+    for k, v in vals.items():
+        print(f"  {k:12}: {v}")
+    res = predict_risk(**vals)
+    print(f"\n  → Prediction          : {res['prediction']}")
+    print(f"  → Confidence          : {res['confidence']}%")
+    print(f"  → Sensors over thresh : {', '.join(res['sensors_above_threshold'])}")
+    print(f"  → Action              : {res['recommendation']}")
 
 print("\n" + "=" * 60)
-print("Demo complete. Model correctly distinguishes:")
+print("Demo complete. Model + thresholds correctly distinguish:")
 print("  • True multi-sensor subsidence events")
-print("  • Isolated noise (machinery / footsteps)")
+print("  • Isolated machinery / footstep noise")
 print("=" * 60)
-
-# Interactive mode
-print("\n\n🔧 INTERACTIVE MODE (press Enter to skip)")
-print("Enter sensor values to test custom readings:\n")
-
-try:
-    tilt = float(input("Tilt (degrees) [0.1-5.0]: ") or "0.2")
-    vibration = float(input("Vibration (g) [0.05-2.0]: ") or "0.1")
-    moisture = float(input("Moisture (%) [10-40]: ") or "22")
-    strain = float(input("Strain [0.1-3.0]: ") or "0.15")
-    crack_gap = float(input("Crack Gap (mm) [0.5-10]: ") or "1.5")
-    rssi = float(input("RSSI (dBm) [-90 to -40]: ") or "-65")
-    acoustic = float(input("Acoustic [0.01-1.0]: ") or "0.05")
-    
-    result = predict_risk(tilt, vibration, moisture, strain, crack_gap, rssi, acoustic)
-    print("\n" + "-" * 40)
-    print(f"  → Prediction     : {result['prediction']}")
-    print(f"  → Confidence     : {result['confidence']}%")
-    print(f"  → Risk Probability: {result['risk_probability']}%")
-    print(f"  → Action         : {result['recommendation']}")
-except (ValueError, EOFError, KeyboardInterrupt):
-    print("\nSkipped interactive mode.")

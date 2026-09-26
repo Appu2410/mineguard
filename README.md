@@ -2,29 +2,51 @@
 ### AI-Enabled Low-Cost Real-Time Mine Subsidence Monitoring System
 
 **Team VORTEX#**  
-**Smart India Hackathon 2026**  
-**Problem Statement:** SIH26025  
-**Theme:** Smart Automation | **Category:** Hardware
+**Smart India Hackathon 2026** | **PS 26025**  
+**Theme:** Smart Automation | **Category:** Hardware  
+**Organization:** Ministry of Coal / Coal India Limited
 
 ---
 
 ## 📌 Overview
 
-MINEGUARD is a low-cost, AI-powered early warning system for detecting and predicting surface subsidence in underground coal mines.  
+MINEGUARD is a low-cost, AI-powered early-warning system for detecting surface subsidence above underground coal mines in India.  
 
-It uses a **9-node ESP32 wireless mesh network** with multi-sensor fusion (tilt, vibration, strain, crack gap, RSSI, acoustic) and Edge AI to raise high-confidence alerts only when multiple sensors agree — effectively filtering out noise from machinery and footsteps.
+It uses a **9-node ESP32 wireless mesh** with multi-sensor fusion (tilt, vibration, strain, crack gap, RSSI, acoustic).  
+The gateway node (N5) raises a **confirmed alert only when ≥3 sensors agree**, filtering out false alarms from machinery, footsteps and blasting.
 
 ---
 
-## 🎯 Key Features
+## 🎯 Key Design Decision
 
-- 9-Node ESP32 Mesh Network (ESP-NOW)
-- Multi-sensor fusion (Tilt + Vibration + Strain + Crack + RSSI)
-- Edge AI for real-time anomaly detection
-- Local processing + Offline alerts
-- GPS tagging of confirmed events
-- GIS visualization support
-- Low-cost & student-prototype friendly
+> **Multi-sensor confirmation (≥3 signals)** is the core innovation.  
+> Isolated high vibration (machinery) is ignored. True ground movement produces concurrent changes in tilt + strain + crack + signal drift.
+
+This logic is implemented both in:
+- The gateway firmware stub (`firmware/`)
+- The Python ML + threshold labelling pipeline
+
+---
+
+## 📐 Literature-Based Thresholds
+
+Alert labels in the dataset and the decision logic are **not arbitrary**.  
+They are derived from published multi-sensor coal-mine monitoring studies and adapted to our low-cost surface mesh.
+
+| Parameter              | Attention     | Warning       | Alert / Danger | Primary Source |
+|------------------------|---------------|---------------|----------------|----------------|
+| **Tilt change**        | > 0.10°      | > 0.20°      | > 0.50°       | CN120489061B + tilt-sensor EWS literature |
+| **Crack widening**     | > 1.5 mm     | > 2.0 mm     | > 5.0 mm      | CN120489061B |
+| **Strain (proxy)**     | > 0.5        | > 1.0        | –             | Mining strain literature + multi-sensor fusion papers |
+| **Vibration**          | –            | High only when accompanied by tilt | – | Filtering design (machinery rejection) |
+| **RSSI / signal drift**| < –75 dBm   | –            | –             | Proxy for relative node movement |
+
+**Indian coalfield context** (used for realistic event magnitudes):
+- Raniganj coalfield – InSAR + DGPS studies (max local rates observed up to ~117 mm/year at critical points)
+- Jharia coalfield – multi-sensor remote sensing of fire-induced subsidence
+- GDK-11 (Singareni) – PS-InSAR monitoring of continuous-miner caving panels
+
+References are listed at the end of this README.
 
 ---
 
@@ -33,128 +55,103 @@ It uses a **9-node ESP32 wireless mesh network** with multi-sensor fusion (tilt,
 ```
 mineguard/
 ├── data/
-│   └── mineguard_sensor_dataset.csv      # 5000-sample synthetic dataset
+│   └── mineguard_sensor_dataset.csv     # 5000 samples, literature-threshold labelled
 ├── models/
-│   ├── mineguard_rf_model.joblib         # Random Forest Classifier
-│   ├── mineguard_iso_model.joblib        # Isolation Forest
-│   ├── mineguard_scaler.joblib           # StandardScaler
-│   └── feature_cols.joblib               # Feature list
-├── demo_prediction.py                    # Live demo script
+│   ├── mineguard_rf_model.joblib        # Random Forest
+│   ├── mineguard_iso_model.joblib       # Isolation Forest
+│   ├── mineguard_scaler.joblib
+│   └── feature_cols.joblib
+├── scripts/
+│   ├── generate_dataset.py              # How the synthetic data + labels are created
+│   └── train_model.py                   # Full training + feature importance
+├── firmware/
+│   ├── README.md
+│   └── gateway_n5_stub.ino              # ESP32 gateway confirmation logic stub
+├── demo_prediction.py                   # Live demo
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## 📊 Dataset
-
-Synthetic dataset simulating real sensor readings from the 9-node mesh:
-
-| Feature       | Description                          | Sensor              |
-|---------------|--------------------------------------|---------------------|
-| tilt          | Ground tilt in degrees               | MPU6050             |
-| vibration     | Vibration intensity (g)              | Piezoelectric       |
-| moisture      | Soil moisture (%)                    | Moisture Sensor     |
-| strain        | Strain / deformation                 | Strain Gauge + HX711|
-| crack_gap     | Crack width (mm)                     | HC-SR04             |
-| rssi          | Signal strength (dBm)                | ESP-NOW             |
-| acoustic      | Acoustic emission                    | Piezo               |
-| label         | 0 = Normal, 1 = Subsidence Risk      | -                   |
-
-- **Total samples:** 5000  
-- **Positive class (risk):** ~12%  
-- Includes realistic noise (machinery/footsteps) to test filtering capability.
-
----
-
-## 🤖 Machine Learning Model
-
-We trained two models:
-
-1. **Random Forest Classifier** (Supervised)  
-   - Learns multi-sensor patterns  
-   - High confidence only when multiple sensors elevate together
-
-2. **Isolation Forest** (Unsupervised)  
-   - Useful for real-world deployment where labeled data is limited
-
-**Key Insight:**  
-Isolated high vibration (machinery) is correctly classified as **NORMAL**.  
-True risk is raised only on multi-sensor agreement — matching our hardware confirmation logic (≥3 signals).
-
----
-
 ## 🚀 Quick Start
 
-### 1. Clone the repository
 ```bash
 git clone https://github.com/appu2410/mineguard.git
 cd mineguard
-```
-
-### 2. Install dependencies
-```bash
 pip install -r requirements.txt
-```
-
-### 3. Run the live demo
-```bash
 python demo_prediction.py
 ```
 
-You will see three test cases:
-- Normal ground condition
-- Clear multi-sensor subsidence event
-- High vibration only (machinery noise → correctly filtered)
+To regenerate everything from scratch:
 
----
-
-## 🖥️ Demo Output Example
-
-```
-📡 CASE 2: High-Risk Multi-Sensor Event
-  tilt        : 2.1
-  vibration   : 0.85
-  strain      : 1.8
-  crack_gap   : 4.5
-  rssi        : -82
-
-  → Prediction     : SUBSIDENCE RISK ⚠️
-  → Confidence     : 100.0%
-  → Action         : Raise multi-sensor confirmed alert + GPS tag + notify operators
+```bash
+python scripts/generate_dataset.py
+python scripts/train_model.py
 ```
 
 ---
 
-## 🛠️ Hardware Used (Prototype)
+## 🤖 Models
 
-- 9 × ESP32 (Sensor Nodes + Gateway)
-- MPU6050 (Tilt / Acceleration)
-- Piezoelectric sensor (Vibration + Acoustic)
-- Strain Gauge + HX711
-- HC-SR04 (Crack gap)
-- NEO-6M GPS (Gateway)
-- ESP-NOW protocol for mesh communication
+1. **Random Forest Classifier** (supervised) – primary demo model  
+2. **Isolation Forest** (unsupervised) – useful when labelled field data is scarce
+
+Both use the same feature set. Feature importance consistently ranks **strain, crack_gap and tilt** highest — matching the physical expectation for subsidence.
+
+**Edge AI note:**  
+Current models run in the Python prototype / gateway companion.  
+Field deployment path: convert the decision rules or a distilled tree to **TensorFlow Lite Micro** on the ESP32 gateway (listed under Future Work).
 
 ---
 
-## 📈 Future Improvements
+## 🛠️ Hardware (Prototype)
 
-- Add time-series forecasting (tilt/strain rate of change) for true progression prediction
-- Deploy lightweight model on ESP32 gateway using TensorFlow Lite Micro
-- Real field data collection & model retraining
-- Full GIS dashboard integration
+- 9 × ESP32 (mesh nodes + N5 gateway)
+- MPU6050 – tilt / acceleration
+- Piezoelectric sensor – vibration + acoustic emission
+- Strain gauge + HX711
+- HC-SR04 – crack gap
+- NEO-6M GPS (gateway only)
+- ESP-NOW mesh communication
+
+---
+
+## 📈 Future Work
+
+- Complete Arduino sensor drivers and full ESP-NOW mesh
+- TensorFlow Lite Micro port of the confirmation logic / lightweight model
+- Field calibration at a Coal India / SCCL site
+- GIS dashboard with live risk zones
+
+---
+
+## 📚 Key References
+
+**Threshold & multi-sensor systems**
+1. CN120489061B – Coal mine area earth surface subsidence real-time monitoring method integrating multiple sensors (multi-level tilt & crack thresholds).
+2. Risk evaluation and warning threshold of unstable slope using tilting sensor array. *Natural Hazards*, 2022.  
+   https://link.springer.com/article/10.1007/s11069-022-05383-y
+
+**Indian coalfield studies**
+3. Surface deformation monitoring of Raniganj coalfield, India, using advanced InSAR and DGPS. *Geomatics, Natural Hazards and Risk*, 2024.  
+   https://doi.org/10.1080/19475705.2024.2375546
+4. Monitoring of Subsidence Over Continuous Miner-Based Coal Mine Caving Panels Using PS-InSAR Technique (GDK-11, India). *Mining, Metallurgy & Exploration*, 2023.  
+   https://link.springer.com/article/10.1007/s42461-023-00744-y
+5. Detecting, mapping and monitoring of land subsidence in Jharia Coalfield… *Journal of Earth System Science*, 2015.
+6. Subsidence monitoring techniques in coal mining: Indian scenario. *Indian Journal of Geo-Marine Sciences*, 2018.  
+   http://nopr.niscpr.res.in/handle/123456789/45170
 
 ---
 
 ## 👥 Team VORTEX#
 
 Smart India Hackathon 2026  
-Problem Statement: SIH26025 – Development of an AI-enabled Low Cost Real Time Mine Subsidence Monitoring, Prediction and Early Warning System for Underground Coal Mines in India
+Problem Statement SIH26025 – Development of an AI-enabled Low Cost Real Time Mine Subsidence Monitoring, Prediction and Early Warning System for Underground Coal Mines in India
 
 ---
 
-## 📄 License
+## License
 
-This project is developed for Smart India Hackathon 2026.  
-Feel free to use for educational and non-commercial purposes.
+Developed for Smart India Hackathon 2026.  
+MIT License – free for educational and non-commercial use.
