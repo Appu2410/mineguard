@@ -136,10 +136,12 @@ Field deployment path: convert the decision rules or a distilled tree to **Tenso
 **Indian coalfield studies**
 3. Surface deformation monitoring of Raniganj coalfield, India, using advanced InSAR and DGPS. *Geomatics, Natural Hazards and Risk*, 2024.  
    https://doi.org/10.1080/19475705.2024.2375546
+   
 4. Monitoring of Subsidence Over Continuous Miner-Based Coal Mine Caving Panels Using PS-InSAR Technique (GDK-11, India). *Mining, Metallurgy & Exploration*, 2023.  
    https://link.springer.com/article/10.1007/s42461-023-00744-y
-5. Detecting, mapping and monitoring of land subsidence in Jharia Coalfield… *Journal of Earth System Science*, 2015.
-6. Subsidence monitoring techniques in coal mining: Indian scenario. *Indian Journal of Geo-Marine Sciences*, 2018.  
+   
+6. Detecting, mapping and monitoring of land subsidence in Jharia Coalfield… *Journal of Earth System Science*, 2015.
+7. Subsidence monitoring techniques in coal mining: Indian scenario. *Indian Journal of Geo-Marine Sciences*, 2018.  
    http://nopr.niscpr.res.in/handle/123456789/45170
 
 ---
